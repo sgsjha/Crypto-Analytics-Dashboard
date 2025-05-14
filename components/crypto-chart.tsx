@@ -1,29 +1,41 @@
-"use client"
+"use client";
 
-import { useMemo } from "react"
-import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
-import { format } from "date-fns"
+import { useMemo } from "react";
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import { format } from "date-fns";
 
 type MetricRecord = {
-  date: string
-  price_usd: number
-  market_cap: number
-  total_volume: number
-  z_score_price: number | null
-  z_score_market_cap: number | null
-  z_score_volume: number | null
-  anomaly_price: boolean
-  anomaly_market_cap: boolean
-  anomaly_volume: boolean
-}
+  date: string;
+  price_usd: number;
+  market_cap: number;
+  total_volume: number;
+  z_score_price: number | null;
+  z_score_market_cap: number | null;
+  z_score_volume: number | null;
+  anomaly_price: boolean;
+  anomaly_market_cap: boolean;
+  anomaly_volume: boolean;
+};
 
 type CryptoChartProps = {
-  data: MetricRecord[]
-  metricType: "price" | "market_cap" | "volume"
-  coinType: "bitcoin" | "ethereum"
-}
+  data: MetricRecord[];
+  metricType: "price" | "market_cap" | "volume";
+  coinType: "bitcoin" | "ethereum";
+};
 
-export default function CryptoChart({ data, metricType, coinType }: CryptoChartProps) {
+export default function CryptoChart({
+  data,
+  metricType,
+  coinType,
+}: CryptoChartProps) {
   // Map metric type to data key and anomaly key
   const metricMapping = {
     price: {
@@ -44,17 +56,26 @@ export default function CryptoChart({ data, metricType, coinType }: CryptoChartP
       anomalyKey: "anomaly_volume",
       label: "Volume (USD)",
     },
-  }
+  };
 
-  const { dataKey, zScoreKey, anomalyKey, label } = metricMapping[metricType]
+  const { dataKey, zScoreKey, anomalyKey, label } = metricMapping[metricType];
 
   // Get color based on coin type
-  const coinColor = coinType === "bitcoin" ? "#F7931A" : "#627EEA"
+  const coinColor = coinType === "bitcoin" ? "#F7931A" : "#627EEA";
 
   // Format data for the chart
   const chartData = useMemo(() => {
-    return data.map((record) => {
-      const isAnomaly = record[anomalyKey] as boolean
+    return data.map((record, index) => {
+      const isAnomaly = record[anomalyKey] as boolean;
+
+      // Calculate percentage change from previous day
+      let percentChange = null;
+      if (index > 0) {
+        const currentValue = record[dataKey] as number;
+        const previousValue = data[index - 1][dataKey] as number;
+        percentChange = ((currentValue - previousValue) / previousValue) * 100;
+      }
+
       return {
         date: record.date,
         value: record[dataKey] as number,
@@ -62,68 +83,105 @@ export default function CryptoChart({ data, metricType, coinType }: CryptoChartP
         isAnomaly,
         // Add a special point for anomalies
         anomalyPoint: isAnomaly ? (record[dataKey] as number) : null,
-      }
-    })
-  }, [data, dataKey, zScoreKey, anomalyKey])
+        percentChange:
+          percentChange !== null ? +percentChange.toFixed(2) : null,
+      };
+    });
+  }, [data, dataKey, zScoreKey, anomalyKey]);
 
   // Format large numbers
   const formatYAxis = (value: number) => {
     if (value >= 1_000_000_000) {
-      return `$${(value / 1_000_000_000).toFixed(1)}B`
+      return `$${(value / 1_000_000_000).toFixed(1)}B`;
     } else if (value >= 1_000_000) {
-      return `$${(value / 1_000_000).toFixed(1)}M`
+      return `$${(value / 1_000_000).toFixed(1)}M`;
     } else if (value >= 1_000) {
-      return `$${(value / 1_000).toFixed(1)}K`
+      return `$${(value / 1_000).toFixed(1)}K`;
     }
-    return `$${value.toFixed(0)}`
-  }
+    return `$${value.toFixed(0)}`;
+  };
 
   // Format date for x-axis
   const formatXAxis = (dateStr: string) => {
-    return format(new Date(dateStr), "MMM d")
-  }
+    return format(new Date(dateStr), "MMM d");
+  };
 
   // Custom tooltip
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
-      const data = payload[0].payload
+      const data = payload[0].payload;
       return (
         <div className="bg-[#222222] p-3 border border-gray-800 rounded-md shadow-lg">
-          <p className="text-gray-300">{format(new Date(label), "MMM d, yyyy")}</p>
+          <p className="text-gray-300">
+            {format(new Date(label), "MMM d, yyyy")}
+          </p>
           <p className="text-white font-bold">
             {formatYAxis(data.value)}
-            {data.isAnomaly && <span className="ml-2 text-red-500 text-xs font-normal">Anomaly Detected</span>}
+            {data.isAnomaly && (
+              <span className="ml-2 text-red-500 text-xs font-normal">
+                Anomaly Detected
+              </span>
+            )}
           </p>
+          {data.isAnomaly && data.percentChange !== null && (
+            <p className="text-sm">
+              <span
+                className={
+                  data.percentChange >= 0 ? "text-green-500" : "text-red-500"
+                }
+              >
+                {data.percentChange >= 0 ? "+" : ""}
+                {data.percentChange}% from previous day
+              </span>
+            </p>
+          )}
           {data.zScore !== null && (
             <p className="text-gray-400 text-xs">
               Z-Score:{" "}
-              <span className={Math.abs(data.zScore) > 1.5 ? "text-red-400" : "text-gray-300"}>
+              <span
+                className={
+                  Math.abs(data.zScore) > 1.5 ? "text-red-400" : "text-gray-300"
+                }
+              >
                 {data.zScore.toFixed(2)}
               </span>
             </p>
           )}
         </div>
-      )
+      );
     }
-    return null
-  }
+    return null;
+  };
 
   // Calculate min and max for y-axis
-  const minValue = Math.min(...chartData.map((item) => item.value))
-  const maxValue = Math.max(...chartData.map((item) => item.value))
-  const yAxisDomain = [minValue * 0.9, maxValue * 1.1]
+  const minValue = Math.min(...chartData.map((item) => item.value));
+  const maxValue = Math.max(...chartData.map((item) => item.value));
+  const yAxisDomain = [minValue * 0.9, maxValue * 1.1];
 
   return (
     <div className="h-[300px] w-full">
       <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
+        <AreaChart
+          data={chartData}
+          margin={{ top: 10, right: 10, left: 10, bottom: 0 }}
+        >
           <defs>
-            <linearGradient id={`colorValue-${coinType}`} x1="0" y1="0" x2="0" y2="1">
+            <linearGradient
+              id={`colorValue-${coinType}`}
+              x1="0"
+              y1="0"
+              x2="0"
+              y2="1"
+            >
               <stop offset="5%" stopColor={coinColor} stopOpacity={0.3} />
               <stop offset="95%" stopColor={coinColor} stopOpacity={0} />
             </linearGradient>
           </defs>
-          <CartesianGrid strokeDasharray="3 3" stroke="#333333" vertical={false} />
+          <CartesianGrid
+            strokeDasharray="3 3"
+            stroke="#333333"
+            vertical={false}
+          />
           <XAxis
             dataKey="date"
             tickFormatter={formatXAxis}
@@ -150,7 +208,12 @@ export default function CryptoChart({ data, metricType, coinType }: CryptoChartP
             fill={`url(#colorValue-${coinType})`}
             strokeWidth={2}
             dot={{ r: 3, fill: coinColor, stroke: coinColor }}
-            activeDot={{ r: 6, fill: coinColor, stroke: "#fff", strokeWidth: 2 }}
+            activeDot={{
+              r: 6,
+              fill: coinColor,
+              stroke: "#fff",
+              strokeWidth: 2,
+            }}
           />
           <Area
             type="monotone"
@@ -163,5 +226,5 @@ export default function CryptoChart({ data, metricType, coinType }: CryptoChartP
         </AreaChart>
       </ResponsiveContainer>
     </div>
-  )
+  );
 }
